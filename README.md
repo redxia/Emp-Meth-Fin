@@ -1,6 +1,8 @@
 # Empirical-Methods-in-Finance
 Empirical Methods in Finance (Time Series)
 
+Winter 2020
+
 Course description: Econometric and statistical techniques commonly used in quantitative finance. Use of estimation application software in exercises to estimate volatility, correlations, stability, regressions, and statistical inference using financial time series.
 
 Topic 1: Time series properties of stock market returns and prices
