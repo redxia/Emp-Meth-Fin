@@ -1,6 +1,6 @@
 ---
 title: "Empirical Methods HW 2"
-author: 'Group 9: Linqi Huang, Abhesh Kumar, Yu Onohara, Maitrayee Patil, Redmond Xia'
+author: 'Redmond Xia'
 date: "January 19, 2020"
 output: pdf_document
 ---
