@@ -1,0 +1,113 @@
+---
+title: "Homework 1"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE)
+library('tidyverse')
+library('sandwich')
+```
+
+
+## Problem 1
+### Question 1
+```{r warning=FALSE}
+ff5 <- read_csv("F-F_Research_Data_5_Factors_2x3.CSV", skip = 3)
+rmw <- ff5[1:677, 5]
+rmw <- as.numeric(rmw$RMW)
+plot(rmw)
+
+rmw_annual_mean <- mean(rmw)*12
+rmw_annual_sd <- sd(rmw)*sqrt(12)
+```
+
+### Question 2
+```{r}
+acf_ac <- acf(rmw, lag.max = 60)
+acf_cumsum <- cumsum(acf_ac$acf)
+plot(acf_cumsum)
+```
+
+The plots DO hint some predictabilty of the factor returns. Specifically, the ACF plot shows there is some 1st order autocorrelation; and the cumulative ACF plot shows the autocorrelations from the 1st to 12th order are mainly positive, while the autocorrelations from the 13th to 40th order are mainly negative. Our interpretation is that, at shorter horizons of less than 12 months, factor returns tend to be weakly positively autocorrelated, while at horizons of more than 12 months, stock returns tend to be weakly negatively autocorrelated.
+
+### Question 3
+```{r}
+Box.test(rmw, lag = 6, type = 'Ljung-Box')
+```
+
+The p-value of this Ljung-Box test equals 0.0004246, which is less than 0.01, means we can reject the null hypothesis that the fist 6 autocorrelations jointly equals zero at 1% significance level.
+
+### Question 4
+```{r}
+ar1 <- lm(rmw ~ lag(rmw, 1))
+summary(ar1)
+```
+
+Because the 1st order autocorrelation is significant than other orders based on the ACF plot, so we choose the ar(1) model and run the regression. The fitted model we get is $rmw_t = 0.21522 + 0.16601 * rmw_{t-1}$; as a result, the prediction model should be $rmw_{t+1} = 0.21522 + 0.16601 * rmw_t$. 
+From the fitted model, we learn that stocks with higher RMW factor in last period should have higher RMW factor in this period as well. Although RMW factors of the last 12 periods cumulatively are positively correlated with RMW factor of this period due to short-term momemtum in stock returns, and RMW factors of the last 13-40 periods cumulatively are negatively correlated with RMW factor of this period due to lont-term reversal in stock returns, but the factor individually is not statistically significant enough, except for the neariest period. 
+
+
+### Question 5
+```{r}
+white_se <- sqrt(diag(vcov(ar1)))
+white_se
+ols_se <- sqrt(diag(vcovHC(ar1)))
+ols_se
+```
+
+
+## Problem 2
+### Question 1
+```{r}
+t = 600
+N = 10000
+r1 <- data.frame(matrix(nrow = t, ncol = N))
+r2 <- data.frame(matrix(nrow = t, ncol = N))
+beta <- double(N)
+se <- double(N)
+for (i in 1:N){
+  r1[,i] <- 0.005 + 0.04 * rnorm(600)
+  r2[,i] <- 0.005 + 0.04 * rnorm(600)
+  fit <- lm(r1[,i]~r2[,i])
+  beta[i] <- fit$coefficients[2]
+  se[i] <- summary(fit)$sigma
+}
+
+mean(beta)
+sd(beta)
+hist(beta, breaks=50)
+mean(beta)/(sd(beta)/sqrt(N))
+mean(se)
+```
+
+Distribution of beta is cluster around 0, and the t-stat for beta is small, which means the result corresponds to the null hypothesis that $\beta = 0$. Besides, the mean of regress standard errors is also very small, which means they look ok.
+
+
+### Question 2
+```{r}
+p1 <- data.frame(matrix(nrow = t, ncol = N))
+p2 <- data.frame(matrix(nrow = t, ncol = N))
+beta2 <- double(N)
+se2 <- double(N)
+for (j in 1:N){
+  p1[1,j] <- r1[1,j]
+  p2[1,j] <- r2[1,j]
+  for (i in 2:t){
+    p1[i,j] <- p1[i-1,j] + r1[i,j]
+    p2[i,j] <- p2[i-1,j] + r2[i,j]
+  }
+  fit2 <- lm(p1[,j]~p2[,j])
+  beta2[j] <- fit2$coefficients[2]
+  se2[j] <- summary(fit2)$sigma
+}
+
+mean(beta2)
+sd(beta2)
+hist(beta2, breaks=50)
+(mean(beta2)-1)/(sd(beta2)/sqrt(N))
+mean(se2)
+```
+
+Distribution of this new beta is cluster around 1, which means the result does not correspond to the null hypothesis that $\beta = 0$. Also, if you test the null hypothesis that  $\beta = 1$, the t-stat for the new beta is small, which means the result does correspond to the null hypothesis that $\beta = 1$. Besides, the mean of regress standard errors is very small, which means they look ok.
+The difference between the previous beta and this beta is mainly because, the previous betas are random numbers that measure changes, while betas in this questions measure level of prices instead of changes, which are more likely following a random walk.

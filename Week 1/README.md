@@ -1,0 +1,1 @@
+This week we review what stationary, autocorrelation, and regression models
