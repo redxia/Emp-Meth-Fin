@@ -1,0 +1,184 @@
+---
+title: "Empirical Methods HW 2"
+author: 'Group 9: Linqi Huang, Abhesh Kumar, Yu Onohara, Maitrayee Patil, Redmond Xia'
+date: "January 19, 2020"
+output: pdf_document
+---
+
+## Question 1
+#3a
+```{r set up}
+phi1 <- 1.1
+phi2 <- -0.25
+
+ar2Sim <- arima.sim(model = list(ar=c(phi1,phi2)), n = 1000)
+acf(ar2Sim,lag.max = 20)
+```
+#3b
+```{r }
+x1 = (phi1 + sqrt(phi1^2 + 4*phi2))/(-2 * phi2)
+x2 = (phi1 - sqrt(phi1^2 + 4*phi2))/(-2 * phi2)
+w1 <- 1/x1
+w2 <- 1/x2
+cat("The roots are ",w1," ",w2,'\n')
+```
+Thus, the two roots are real and less than one in modulus. So it is a stationary process
+
+#3c
+The dynamic multiplier for this series is
+$\frac{\partial X_t}{\partial \varepsilon}= \phi_1^6 + 5 \phi_1^4\phi_2 + 6\phi_1^2\phi_2^2 + \phi_2^3$
+```{r }
+dMultiplier1 <- phi1^6 + 5 * phi1^4 *phi2 + 6 * phi1^2 * phi2^2 + phi2^3
+cat("The multiplier is ",dMultiplier1,'\n')
+```
+
+#3d
+```{r }
+phi1 <- 0.9
+phi2 <- 0.8
+dMultiplier2 <- phi1^6 + 5 * phi1^4 *phi2 + 6 * phi1^2 * phi2^2 + phi2^3
+cat("The multiplier is: ", dMultiplier2,'\n')
+
+x1 = (phi1 + sqrt(phi1^2 + 4*phi2))/(-2 * phi2)
+x2 = (phi1 - sqrt(phi1^2 + 4*phi2))/(-2 * phi2)
+w1 <- 1/x1
+w2 <- 1/x2
+cat("The roots are: ",w1," ",w2,'\n')
+```
+The root is now bigger than one in modulus, thus this process is not stationary. It allows for greater shock and it is not mean reverting.
+
+#3e
+```{r }
+phi1 <- 1.1
+phi2 <- -0.25
+
+x <- numeric(63)
+x[1] <- 0
+x[2] <- 0
+x[3] <- x[2] * phi1 + x[1] * phi2 + 1 #epsilon at t is one
+for (i in 4:63) {
+  x[i] <- x[i-1]*phi1 + x[i-2]*phi2 + rnorm(1,0,1)
+}
+
+plot(x[-1],type = "l", xlab = "Time", ylab = "Impulse-Response Plot")
+```
+
+# Question 2
+Reading in the data
+```{r }
+suppressMessages(suppressWarnings(library(readxl)))
+suppressMessages(suppressWarnings(library(forecast)))
+suppressMessages(suppressWarnings(library(xts)))
+PPI <- read_xls("PPIFGS.xls")
+```
+# 1a,b,c,d
+```{r }
+PPI_xts <- xts(x = as.double(PPI$VALUE),as.Date(PPI$DATE))
+par(mfrow= c(2,2))
+plot(PPI_xts, main = "PPI in levels")
+plot(diff(PPI_xts), main = "Delta PPI")
+plot(log(PPI_xts), main = "Log PPI")
+plot(diff(log(PPI_xts)), main = "Delta Log PPI")
+```
+
+# 2
+The series 1a,c are most likely not covariance stationary because the mean changes over time.
+Between 1b and 1d, d is more likely to be covariance stationary because its volatility is more stable or constant
+choose $y_t = f(PPI_t)$
+
+# 3
+```{r }
+par(mfrow = c(1,1))
+acf(diff(log(PPI_xts))[-1], lag.max = 12)
+```
+We notice that this plot starts to converge slowly after a year. This means there might be some seasonality or short term memory. We conclude a short term ar process may be useful.
+
+# 4
+```{r }
+pacf(diff(log(PPI_xts))[-1], lag.max = 12)
+```
+We conclude that there is still significant lags for the first two lags and for the 11th. A short term lag may be useful and includes lag 11, which is the outlier.
+
+# 5a
+We will fit the ar(3) and ar(1,2,3,11) model based on the acf graph. Lastly, we check what ar is selected by the AIC criterion for up to 20 lags.
+```{r }
+ar_3 <- arima(diff(log(PPI_xts)),order = c(3,0,0))
+ar_3
+cat("s.e. for the model", sqrt(ar_3$sigma2),'\n')
+ar_12311 <- arima(diff(log(PPI_xts)),order = c(11,0,0),
+                                        fixed = c(NA,NA,NA,0,0,0,0,0,0,0,NA,NA),
+                                        transform.pars = FALSE)
+ar_12311
+cat("s.e. for the model", sqrt(ar_12311$sigma2),'\n')
+ar_20 <- ar(diff(log(PPI_xts))[-1], order.max = 20, aic = TRUE)
+ar_20
+# ar(3) is used
+
+ar_3Roots <- polyroot(c(1,-ar_3$coef[1:3]))
+ar_12311Roots <- polyroot(c(1,-ar_12311$coef[1:11]))
+cat("Modulus for ar3: ", Mod(1/ar_3Roots),'\n')
+cat("Modulus for ar(1,2,3,11): \n", Mod(1/ar_12311Roots),'\n')
+```
+Since all of the characteristic roots are smaller than 1, we conclude these models are stationary
+
+# 5b
+```{r }
+par(mfrow = c(1,2))
+plot(ar_3$residuals,ylab = "Residuals", main = "AR(3) Residual Plot")
+plot(ar_12311$residuals, ylab = "Residuals", main = "AR(1,2,3,11) Residual Plot")
+```
+
+# 5c
+```{r }
+Box.test(ar_12311$residuals, lag = 8, type = "Ljung-Box")
+Box.test(ar_3$residuals, lag = 8, type = "Ljung-Box")
+Box.test(ar_12311$residuals, lag = 12, type = "Ljung-Box")
+Box.test(ar_3$residuals, lag = 12, type = "Ljung-Box")
+cat("The AIC for AR(3): ", ar_3$aic, ". The BIC for AR(3): ", BIC(ar_3),
+    '\n',"The AIC for AR(1,2,3,11): ", ar_12311$aic, ". The BIC for AR(1,2,3,11): ", BIC(ar_12311),'\n')
+```
+AR(1,2,3,11) scored both lower on AIC and BIC criterion. At the same time the p-values for AR(1,2,3,11) is greater for each of the respective lags. Choose AR(1,2,3,11)
+
+## 6
+```{r }
+isDateBefore2005 <- which(PPI$DATE <= "2005-12-31")
+isDateAfter2005 <- which(PPI$DATE > "2005-12-31")
+indexB05 <- length(isDateBefore2005)
+qtr_ahead <- length(isDateAfter2005)
+ar3_pred <- numeric(qtr_ahead + 1)
+ar12311_pred <- numeric(qtr_ahead + 1)
+
+ar3_pred[1] = as.numeric(PPI[indexB05,"VALUE"])
+ar12311_pred[1] = as.numeric(PPI[indexB05,"VALUE"])
+for(i in 1:qtr_ahead) {
+  ar3 <- arima(diff(log(as.numeric(xts(PPI[1:(indexB05+i),],
+                                       PPI[1:(indexB05+i),]$DATE)[,-1]$VALUE))), order = c(3,0,0))
+  ar3_pred[i+1] <- exp(diffinv(forecast(ar3, h = 1)$mean))[2] * 
+                   as.numeric(PPI[indexB05+i,'VALUE']) # This transforms the value back
+  
+  
+  ar12311 <- arima(diff(log(as.numeric(xts(PPI[1:(indexB05+i),],
+                                           PPI[1:(indexB05+i),]$DATE)[,-1]$VALUE))), order=c(11,0,0),
+                                           fixed=c(NA,NA,NA,0,0,0,0,0,0,0,NA,NA), transform.pars = FALSE)
+  ar12311_pred[i+1] <- exp(diffinv(forecast(ar12311, h = 1)$mean))[2] * 
+                       as.numeric(PPI[indexB05+i,'VALUE']) #This transform the values back
+}
+
+# transforming the values back
+mspe_ar3 <- sum((PPI[isDateAfter2005,]$VALUE - ar3_pred[-1])^2) / qtr_ahead
+mspe_ar12311 <- sum((PPI[isDateAfter2005,]$VALUE - ar12311_pred[-1])^2) / qtr_ahead
+cat("MSPE for AR(3): ", mspe_ar3, '\n',"MSPE for AR(1,2,3,11): ", mspe_ar12311)
+```
+We notice the MSPE for AR(1,2,3,11) is lower than the AR(3), which is consistent with 5c
+Next, we simulate a random walk model.
+```{r }
+randomWalk_forecast <- numeric(qtr_ahead)
+randomWalk_forecast[1] <- as.numeric(PPI[indexB05+1,"VALUE"]) + rnorm(1,1,1)
+for(i in 2:qtr_ahead){
+  randomWalk_forecast[i] <- randomWalk_forecast[i - 1] + rnorm(1,1,1)
+}
+mspe_RW <- sum((PPI[isDateAfter2005,]$VALUE - randomWalk_forecast)^2) / qtr_ahead
+cat("random walk mspe: ", mspe_RW)
+```
+Comparing the MSPE, we see that the random walk performs way worse as expected. We conclude, that PPI does not follow a random walk model, and could be reasonable predicted using the AR model. If we take the sqrt of the mspe then the we have an average error of 1.745 which is roughly 1% off on average.
+
