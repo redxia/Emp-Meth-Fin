@@ -1,0 +1,248 @@
+---
+title: "Empirical Methods HW 2"
+author: 'Group 9: Linqi Huang, Abhesh Kumar, Yu Onohara, Maitrayee Patil, Redmond Xia'
+date: "January 19, 2020"
+output: pdf_document
+---
+
+## Problem 1
+
+1.
+
+The first order autocorrelation of the ARMA(1,1) model can be written as follow.
+
+\begin{align*}
+\rho_1 &= \phi_1 - \theta_1 \frac{\sigma_\epsilon^2}{\gamma_0}\\
+\end{align*}
+
+Hence, we will compute $\gamma_0$ first, and then also compute $\rho_1$.
+
+```{r}
+# Assumptions
+phi1 = 0.95
+theta1 = 0.9
+sigma = 0.05
+
+# Caluculating the covariance with lag 0 (= Variance of yt)
+gamma0 = sigma^2 * (1 + theta1^2 - 2 * phi1 * theta1) / (1 - phi1^2)
+gamma0
+
+# Using gamma above, compute the first order autocorrelation
+rho1 = phi1 - theta1 * (sigma^2 / gamma0)
+rho1
+```
+
+2.
+
+The $j$th ($j > 1$) order autocorrelation of the ARMA(1,1) model can be written as follow.
+
+\begin{align*}
+\rho_j = \phi_1\rho_(j-1)
+\end{align*}
+
+Therefore, we will compute the second order autocorrelation of the ARMA model as follow.
+
+```{r}
+# Using the first order autocorrelation, compute the second order autocorrelation
+rho2 = phi1 * rho1
+rho2
+rho2 / rho1 # = phi1
+```
+
+The ratio of the second-order to the first-order autocorrelation equals to $\phi_1$. since this fact implies that the autocorrelation of the this model $(\phi_1 < 1)$ converge to 0 $(\lim_{j \to \infty} \rho_j = 0)$, this process is stationary.
+
+3.
+
+We will compute the conditional expectation of $y_{t+1}$ and $y_{t+2}$ as follow.
+
+\begin{align*}
+E[y_{t+1}|y_t] &= E[\phi_1 y_t - \theta_1 \epsilon_t + \epsilon_{t+1}] \\
+&= \phi_1 y_t - \theta_1 \epsilon_t + 0 \\
+&= \phi_1 y_t - \theta_1 \epsilon_t 
+\end{align*}
+
+\begin{align*}
+E[y_{t+2}|y_t] &= E[\phi_1 y_{t+1} - \theta_1 \epsilon_{t+1} + \epsilon_{t+2}] \\
+&= \phi_1 E[y_{t+1}|Y_t] - \theta_1 E[\epsilon_{t+1}] + E[\epsilon_{t+2}] \\
+&= \phi_1 (\phi_1 y_t - \theta_1 \epsilon_t) \\
+&= \phi_1^2 y_t - \phi_1 \theta_1 \epsilon_t
+\end{align*}
+```{r}
+# Calculatingt the conditional expectations of yt+1 and yt+2
+yt = 0.6
+epsiront = 0.1
+E_yt1 = phi1 * yt - theta1 * epsiront
+E_yt2 = phi1^2 * yt - phi1 * theta1 * epsiront
+E_yt1
+E_yt2
+```
+
+4. We will compute the unconditional $E[\hat{x_t}]$, $Var[\hat{x_t}]$ and $\rho$ as follow.
+
+\begin{align*}
+E[\hat{x_t}] &= E[\phi_1 y_t - \theta_1 \epsilon_t] \\
+&= \phi_1E[y_t] - \theta_1E[\epsilon_t] \\
+&= \phi_1\frac{\phi_0}{1-\phi_1} - \theta_1*0 \\
+&= \phi_1\frac{0}{1-\phi_1} \\
+&= 0
+\end{align*}
+```{r}
+var_yt = gamma0
+var_yt1 = phi1^2*var_yt + theta1^2*sigma^2 - 2*phi1*theta1*sigma^2
+sd_yt1 = sqrt(var_yt1)
+sd_yt1
+```
+
+\begin{align*}
+Var[\hat{x_t}] &= Var[\phi_1 y_t - \theta_1 \epsilon_t] \\
+&= \phi_1^2 Var[y_t] +\theta_1^2Var[\epsilon_t]-2\phi_1\theta_1Cov[y_t,\epsilon_t] \\
+&= \phi_1^2\sigma^2\frac{1+\theta_1^2-2\phi_1\theta_1}{1-\phi_1^2} + \theta_1^2\sigma^2 - 2\phi_1\theta_1\sigma^2 \\
+&= 0.008006408
+\end{align*}
+
+```{r}
+gamma1 = phi1*gamma0 - theta1*sigma^2
+rho_f = phi1^2*gamma1 - phi1*theta1*(phi1-theta1)*sigma^2
+rho_f
+```
+
+\begin{align*}
+Cov[\hat{x_t},\hat{x_{t-1}}] &= Cov[\phi_1 y_t - \theta_1 \epsilon_t, \phi_1 y_{t-1} - \theta_1 \epsilon_{t-1}] \\
+&= \phi_1^2Cov[y_t,y_{t-1}] - \phi_1\theta_1Cov[y_t,\epsilon_{t-1}] - \phi_1\theta_1Cov[y_{t-1},\epsilon_t] + \theta_1^2Cov[\epsilon_t,\epsilon_{t-1}] \\
+&= \phi_1^2\gamma_1 - \phi_1\theta_1Cov[\phi_1y_{t-1}+\epsilon_t-\theta_1\epsilon_{t-1},\epsilon_{t-1}] - 0 - 0 \\
+&= \phi_1^2\gamma_1 - \phi_1\theta_1(\phi_1Var[\epsilon_{t-1}]-\theta_1Var[\epsilon_{t-1}]) \\
+&= \phi_1^2\gamma_1 - \phi_1\theta_1(\phi_1-\theta_1)\sigma^2 \\
+&= 0.000061
+\end{align*}
+
+
+## Problem 2
+
+1.
+
+From the assumption $\phi = 0$, we can rewrite the $e_t$ as follow.
+
+$$e_t = e_{t-1} + \epsilon_t$$
+
+Then, using the recursive calculation of $e_t$, we can obtain $e_{t-4}$ as follow.
+
+\begin{align*}
+e_{t-4} &= e_{t-3} - \epsilon_{t-3} \\
+e_{t-3} &= e_{t-2} - \epsilon_{t-2} \\
+e_{t-2} &= e_{t-1} - \epsilon_{t-1} \\
+\end{align*}
+
+Hence,
+$$e_{t-4} = e_{t-1} - \epsilon_{t-1} - \epsilon_{t-2} - \epsilon_{t-3}$$
+
+Therefore,
+
+\begin{align*}
+y_t &= e_{t} - e_{t-4} \\
+y_t &= e_{t-1} + \epsilon{t} - (e_{t-1} - \epsilon_{t-1} - \epsilon_{t-2} - \epsilon_{t-3}) \\
+y_t &= \epsilon_t + \epsilon_{t-1} + \epsilon_{t-2} + \epsilon_{t-3} 
+\end{align*}
+
+To calculate the autocovariances of this process, we will use the following property of the covariance.
+
+$$Cov(aX + bY, cW + dV) = acCov(X, W) + adCov(X,Z) + bcCov(Y, W) + bdCov(Y,V)$$
+
+Since $\epsilon_t$ is i.i.d, $Cov(\epsilon_t, \epsilon_{t-j}) = 0$ if any $j > 0$.
+Therefore, we can calculate the autocovariance of order 0 through 5 as follow.
+
+\begin{align*}
+Cov(y_t, y_t) &= Var(\epsilon_{t}) + Var(\epsilon_{t-1}) + Var(\epsilon_{t-2})+ Var(\epsilon_{t-3}) \\
+&= 4\sigma^2 \\
+Cov(y_t, y_{t-1}) &= Var(\epsilon_{t-1}) + Var(\epsilon_{t-2})+ Var(\epsilon_{t-3}) \\
+&= 3\sigma^2 \\
+Cov(y_t, y_{t-2}) &= Var(\epsilon_{t-2})+ Var(\epsilon_{t-3}) \\
+&= 2\sigma^2 \\
+Cov(y_t, y_{t-3}) &= Var(\epsilon_{t-3}) \\
+&= \sigma^2 \\
+Cov(y_t, y_{t-4}) &= 0 \\
+Cov(y_t, y_{t-5}) &= 0
+\end{align*}
+
+3.
+
+This model has no AR structure because we have no $y_{t-j}$ terms in the model. However, $\epsilon_t$ has 3 $\epsilon$ terms. Hence, this model is ARMA(0,4) model (MA(4) model). Also, each coefficient of $\epsilon$ terms equals to 1.
+
+
+## Problem 3
+1.
+
+\begin{align*}
+Var(R_{t+1}^e) = \beta^2 Var(x_t) + Var(\epsilon_{t+1}) = 1 * (0.05)^2 + 0.15^2 = 0.025 \\
+SD(R_{t+1}^e) = \sqrt{0.025} = .15811 \\
+\end{align*}
+
+
+2.
+
+\begin{align*}
+R^2 = \rho^2 = (\dfrac{Cov(R_{t+1}^e,x_t)}{\sigma_{R_{t+1}^e}\sigma_{x_t}})^2 = (\dfrac{Cov(\beta x_t + \epsilon_{t-1},x_t)}{\sigma_{R_{t+1}^e}\sigma_{x_t}})^2 = (\dfrac{Var(x_t)}{\sigma_{R_{t+1}^e}\sigma_{x_t}})^2 = \dfrac{Var(x_t)}{Var(R_{t+1}^e)} = \dfrac{0.05^2}{0.025} = 0.1 
+\end{align*}
+
+
+3. 
+
+Sharpe Ratio = $\dfrac{E[R_{t+1}^e]}{\sigma_{mkt}} = \dfrac{0.05}{\sqrt{0.025}} = 0.31622$
+
+
+4.
+
+\begin{align*}
+\gamma = \dfrac{40}{9} 
+&\\ 
+\alpha_t = \dfrac{E[x_t]}{\gamma \sigma_t^2[R_{t+1}^e]} = \dfrac{E[x_t]}{\gamma (\sigma_t^2[x_t] + \sigma_t^2[\epsilon_{t+1}])} \\
+So,\ if\ x = 0,\ then\ \alpha_t = \dfrac{0}{positive} = 0 \implies Sharpe\ Ratio = 0\\
+if\ x = .1, \alpha_t = \dfrac{.1}{\dfrac{40}{9} (0.15^2)} = 1 \implies Sharpe\ Ratio = \dfrac{.1}{.15} = 0.67
+\end{align*} 
+
+
+5.
+
+a) Below is the Expected value of the return
+```{r setup}
+prob <- 0.5
+xt_1 <- 0
+xt_2 <- 0.1
+alphat_1 <- 0
+alphat_2 <- 1
+sigma_e <- 0.15
+E_alpR <- prob*alphat_1*xt_1 + prob*alphat_2*xt_2
+E_alpR
+```
+
+b) The output below is the unconditional standard deviation
+```{r}
+var_alpR <- prob*alphat_2^2*(xt_2^2+sigma_e^2) - (prob*alphat_2*xt_2)^2
+sqrt(var_alpR)
+```
+
+c) Below is the Sharpe ratio
+```{r}
+E_alpR / sqrt(var_alpR)
+```
+
+d) 
+i.Below is the implied R^2
+```{r}
+xt_3 <- -0.05
+xt_4 <- 0.15
+E_xt <- prob*xt_3 + prob*xt_4
+Var_xt <- prob*(xt_3-E_xt)^2 + prob*(xt_4-E_xt)^2
+R_sq2 <- Var_xt / (Var_xt+sigma_e^2)
+R_sq2
+```
+
+ii. Below is the higher Sharpe ratio
+```{r}
+gamma_t <- 40/9
+alphat_3 <- xt_3 / (gamma_t*sigma_e^2)
+alphat_4 <- xt_4 / (gamma_t*sigma_e^2)
+E_alpR2 <- prob*alphat_3*xt_3 + prob*alphat_4*xt_4
+var_alpR2 <- prob*alphat_3^2*(xt_3^2+sigma_e^2) + prob*alphat_4^2*(xt_4^2+sigma_e^2) - E_alpR2^2
+E_alpR2 / sqrt(var_alpR2)
+```
+

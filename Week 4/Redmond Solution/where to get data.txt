@@ -1,0 +1,14 @@
+SP 500
+Home/Get Data/CRSP/Annual Update/Index / S&P 500 Indexes/CRSP Index File on the S&P 500
+
+T bill
+Home/Get Data/CRSP/Annual Update/Treasuries/CRSP TREASURIES - Monthly Riskfree Series (1-month and 3-month)
+
+For the former, use the "10-Year Treasury Constant Maturity Minus Federal Funds Rate,"
+https://fred.stlouisfed.org/series/T10YFFM
+
+the latter subtract "Moodys Seasoned Aaa Corporate Bond Minus Federal Funds Rate " 
+https://fred.stlouisfed.org/series/AAAFFM
+
+from "Moodys Seasoned Baa Corporate Bond Minus Federal Funds Rate."
+https://fred.stlouisfed.org/series/BAAFFM

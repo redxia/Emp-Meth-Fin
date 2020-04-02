@@ -1,0 +1,108 @@
+### Empirical Methods in Finance HW7
+
+# Importing libraries and organizing data
+library(tidyverse)
+library(readxl)
+library(ggrepel)
+
+ff <- read_csv('F-F_Research_Data_Factors.csv', skip=3)%>% 
+  filter(X1>=196001 & X1<=201512) 
+
+ind <- read_csv('48_Industry_Portfolios.csv', skip=11) %>% 
+  filter(X1>=196001 & X1<=201512) %>% 
+  slice(1:nrow(ff)) %>% 
+  mutate_if(is.numeric, list(~na_if(., "-99.99"))) %>% 
+  select_if(~!any(is.na(.))) %>% 
+  mutate(RF = ff$RF) 
+Ind = ind[2:44] - ind$RF
+
+# Problem 1
+cov.mat = cov(Ind) # variance-covariance matrix of the excess return
+eigen.cov = eigen(cov.mat) # solving eigen prblem
+eigen.val = eigen.cov$values # eigen value
+eigen.vec = eigen.cov$vectors # eigen vector
+frac.var = eigen.val / sum(eigen.val) # fraction of variance explained
+
+# Plotting the fractions
+df = data.frame(matrix(ncol = 0, nrow = length(frac.var))) %>%
+  mutate(PC = seq(1, length(frac.var), 1)) %>%
+  mutate(frac = frac.var)
+
+plot1 = ggplot(data = df, aes(x = PC, y = frac)) + geom_bar(stat = "identity")
+plot1 = plot1 + ggtitle("Fraction of Variance Explained")
+plot1 
+
+# Problem 2
+# a
+cum.frac.var = sum(frac.var[1:3])
+cum.frac.var
+
+# b
+# Implementing PCA
+pca = prcomp(Ind)
+
+# Picking weights and calculating sample mean, stddev, and correlation
+weight = pca$rotation
+ind.mean = apply(Ind, 2, mean)
+ret = as.matrix(Ind) %*% weight
+sample.mean = apply(ret, 2, mean)
+sample.stddev = sqrt(apply(ret, 2, var))
+cor.mat = cor(ret)
+cor.mat = cor.mat[1:3,1:3]
+
+# c
+# Calculating E[Rt] and E[Ft]. Beta equals to weights
+beta = weight[, 1:3]
+E.Ft = sample.mean[1:3]
+E.Rt = beta %*% E.Ft
+act.ret = apply(Ind, 2, mean)
+
+# Plotting the results
+df2 = data.frame(matrix(ncol = 0, nrow = length(E.Rt))) %>%
+  mutate(Industry = colnames(Ind)) %>%
+  mutate(Ex.Return = E.Rt) %>%
+  mutate(Act.Return = act.ret)
+
+plot2 = ggplot(data = df2, aes(x = Act.Return, y = Ex.Return, label = Industry)) + geom_point()
+plot2 = plot2 + geom_abline(intercept = 0) + xlim(c(0.1,1)) + ylim(c(0.2,0.8))
+plot2 = plot2 + geom_text_repel()
+plot2
+
+# d
+diff = act.ret - E.Rt
+diff.va = diff - mean(diff)
+test = act.ret - mean(act.ret)
+var.d = var(diff)
+var.act = var(df2$Act.Return)
+Rsquare = 1 - var.d / var.act
+Rsquare
+
+
+# Problem 3
+# a
+# preparing the data
+ff25 <- read_csv('25_Portfolios_5x5.CSV', skip=15)%>% 
+  filter(X1>=196001 & X1<=201512) %>% 
+  slice(1:nrow(ff))
+FF25 = ff25[,2:26]
+FF25 = FF25 - ind$RF
+
+# getting the fraction of variance in the similar way of problem 1
+cov.matff = cov(FF25)
+eigen.covff = eigen(cov.matff)
+eigen.valff = eigen.covff$values
+eigen.vecff = eigen.covff$vectors
+frac.varff = eigen.valff / sum(eigen.valff)
+
+df3 = data.frame(matrix(ncol = 0, nrow = length(frac.varff))) %>%
+  mutate(PC = seq(1, length(frac.varff), 1)) %>%
+  mutate(frac = frac.varff)
+
+# plotting the fraction of variance explained
+plot3 = ggplot(data = df3, aes(x = PC, y = frac)) + geom_bar(stat = "identity")
+plot3 = plot3 + ggtitle("Fraction of Variance Explained")
+plot3 
+
+# b
+cum.frac.varff = cumsum(frac.varff[1:25])
+cum.frac.varff

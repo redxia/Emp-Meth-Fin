@@ -1,0 +1,234 @@
+---
+title: "Empirical Methods Homework 4"
+author: 'Group 9: Linqi Huang, Abhesh Kumar, Yu Onohara, Maitrayee Patil, Redmond Xia'
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(sandwich)
+library(knitr)
+```
+
+## Problem 1
+### Question 1
+Download data and compute dividend yield, excess return, term spread and default spread accordingly.
+
+```{r message=FALSE, warning=FALSE}
+# Download data from CRSP and compute dividend yield
+sp <- read_csv('sp500.csv') 
+sp <- sp %>% 
+  mutate(div = vwretd - vwretx) %>% 
+  mutate(yield_div = double(nrow(sp)))
+sp$yield_div[1:12] <- NA  
+for (i in 13:nrow(sp)){
+  sp$yield_div[i] = (sum(sp$div[(i-1) : (i-12)]) / (sp$vwretx[i]+1))
+}
+
+tb <- read_csv('t-bill.csv') %>% 
+  mutate(DATE = caldt)
+
+# Compute excess return
+df <- inner_join(sp, tb, by='DATE') %>% 
+  mutate(excess_return = log(vwretd+1) - log(t30ret+1)) %>% 
+  select(DATE, yield_div, excess_return) %>% 
+  mutate(DATE = floor_date(ymd(DATE), 'month'))
+
+# Download data from FRED and compute spreads
+t_sp <- read_csv('T10YFFM.csv') %>% 
+  mutate(T10YFFM = T10YFFM/100) %>% 
+  rename(spread_term = T10YFFM)
+aaa <- read_csv('AAAFFM.csv')
+baa <- read_csv('BAAFFM.csv')
+d_sp <- inner_join(aaa, baa, by='DATE') %>%
+  mutate(spread_default = BAAFFM/100 - AAAFFM/100)
+
+spread <- inner_join(t_sp, d_sp, by='DATE') %>% 
+  select(DATE, spread_term, spread_default) 
+
+# Join dataframes to obtain all data needed for future computation
+df <- inner_join(df, spread, by='DATE') 
+```
+
+### Question 2
+The plot is shown below following sequence of excess return, default spread, term spread and dividend yield.
+
+```{r message=FALSE, warning=FALSE}
+# Plot excess return, dividend yield, term spread, and default spread
+gather(df, yield_div : spread_default, key='yeah', value='Variables') %>% 
+  ggplot() + 
+  geom_line(aes(x=DATE, y=Variables)) + 
+  facet_grid(yeah~., scale='free')
+```
+
+### Question 3
+```{r message=FALSE, warning=FALSE}
+# Run regressions
+lm1 <- lm(excess_return ~ lag(yield_div) + lag(spread_term) + lag(spread_default), data = df)
+out1<- summary(lm1)
+coef1<- as.numeric(out1$coefficients[,1])[-1]
+ols1 <- as.numeric(out1$coefficients[,2])[-1]
+reg1 <- c(coef1[1], ols1[1], NA, coef1[2], ols1[2], NA,
+          coef1[3], ols1[3], NA, out1$r.squared)
+
+roll_func <- function(window){
+  roll = double(nrow(df))
+  for (i in 1 : (nrow(df)-window)){
+    roll[i] = sum(df$excess_return[(i+1) : (i+window)])
+  }
+  for (i in (nrow(df)-window+1): nrow(df)){
+    roll[i] = NA
+  }
+  return (roll)
+}
+
+df$mo3 <- roll_func(3)
+df$mo12 <- roll_func(12)
+df$mo24 <- roll_func(24)
+df$mo60 <- roll_func(60)
+
+reg_func <- function(y, lags){
+  lm <- lm(y ~ yield_div + spread_term + spread_default, data = df)
+  out <- summary(lm)
+  coef <- c(as.numeric(out$coefficients[,1])[-1])
+  ols <- c(as.numeric(out$coefficients[,2])[-1])
+  nw <- NeweyWest(lm, lag=(lags-1)*1.5, prewhite=F, adjust=T)
+  nw_se <- as.numeric(sqrt(diag(nw))[-1])
+  result <- c(coef[1], ols[1], nw_se[1], coef[2], ols[2], nw_se[2], 
+              coef[3], ols[3], nw_se[3], out$r.squared)
+  return (result)
+}
+
+result <- data.frame(M1 = reg1, M3 = reg_func(df$mo3,3), M12 = reg_func(df$mo12,12), 
+                     M24 = reg_func(df$mo24,24), M60 = reg_func(df$mo60,60))
+
+row.names(result) <- c('Div Yield', 'OLS_DY', 'NW_DY', 'Term Spread', 'OLS_TS', 'NW_TS', 
+                       'Default Spread', 'OLS_DS', 'NW_DS', 'R-squared')
+kable(result, caption='Results from Regressions')
+```
+
+In this part, we run multiple linear regressions for three predictive variables (the lagged dividend yield, term spread, and default spread). The results from each of these regressions (regression coeficients, standard errors, and $R^2$) are reported as above. We will choose Newey-West standard error for all of regression models, except for the 1-month regression model. The reason is that for overlapping data with long horizons, we need Newey-West method to correct autocorrelation and heteroscedasticity within the standard error and the residuals. 
+
+### Question 4
+```{r message=FALSE, warning=FALSE}
+# Use 12-month regression model to obtain forecasting 12-month excess return
+lm12 <- lm(mo12 ~ yield_div + spread_term + spread_default, data = df)
+pred12 <- df %>% 
+  select(DATE, mo12, yield_div, spread_term, spread_default) 
+pred12 <- pred12 %>% 
+  mutate(pred = predict(lm12, pred12[,3:5])) %>% 
+  drop_na()
+
+# Plot 12-Month Excess Return and predicted 12-Month Excess Return
+ggplot(pred12) +
+  geom_line(aes(DATE, pred), colour = 'purple') +
+  geom_line(aes(DATE, mo12), colour = 'orange') +
+  labs(y = 'Excess Return', title = '12-Month Excess Return') +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+12-Month Excess Return and predicted 12-Month Excess Return are plotted above, with 12-Month Excess Return in orange and predicted 12-Month Excess Return in purple. 
+
+```{r message=FALSE, warning=FALSE}
+gather(pred12, yield_div : pred, key='yeah', value='Variables') %>% 
+  ggplot() + 
+  geom_line(aes(x=DATE, y=Variables)) + 
+  facet_grid(yeah~., scale='free')
+```
+
+We also plot predicted 12-Month Excess Return together with default spread, term spread and dividend yield. As we can see, a lower 12-month expected return is usually associated with higher default spread, term spread and dividend yield, vice versa. These patterns actually make sense. Regarding the spreads, during recession, default spread and term spread will usually widen, and stock excess return will become negative. Regarding dividend yield, stock with higher yield for a long time tend to decrease in price or increase slower in the future. 
+
+### Question 5
+AR(1) model is useful because after we get the regression model, we only need observation from current period to predict next period, while regressing returns at different horizons on lagged predictive variables require more previous observations to do the prediction. Besides, shock to stock returns are built into the AR model with $\epsilon_t$, which enables the model to have degrees of uncertainty or randomness built in with real-life interpretation. 
+
+\newpage
+## Problem 2
+### Question 1
+
+Given: $mb_t = log(\frac{m_t}{B_t}) = 0.7$, $roe_t = log(1 + ROE_t) = log(1.2) = 0.1823216$, $\epsilon_t = 0.1$
+
+$$CF_t = E_t\sum_{j=1}^{\infty}\kappa^{j-1}roe_{t+j}$$
+To calculate $CF_t = E_t\sum_{j=1}^{\infty}\kappa^{j-1}roe_{t+j}$,
+
+\begin{align*}
+E_t[roe_{t+1}] &= E_t[0.05 + 0.09(roe_t - 0.05) - 0.6\epsilon_t + \epsilon_{t+1}]\\
+&= 0.005 + 0.9roe_t - 0.06
+\end{align*}
+
+Recursively solve $roe_t$ forward,
+
+\begin{align*}
+E_t[roe_{t+2}] &= 0.005 + 0.9E_t[roe_{t+1}]\\
+&= 0.005 + 0.9(0.005 + 0.9roe_t - 0.06)\\
+&= 0.005(1 + 0.9) + 0.9^2roe_t - 0.9\times 0.06)
+\end{align*}
+
+\begin{align*}
+E_t[roe_{t+3}] &= 0.005 + 0.9E_t[roe_{t+2}]\\
+&= 0.005 + 0.9(0.005(1 + 0.9) + 0.9^2roe_t - 0.9\times 0.06))\\
+&= 0.005(1 + 0.9 + 0.9^2) + 0.9^3roe_t - 0.9^2\times 0.06)
+\end{align*}
+
+Hence,
+
+\begin{align*}
+E_t[roe_{t+j}] &= 0.005\sum_{i=1}^{j}0.9^{i-1} + 0.9^j roe_t - 0.9^{j-1}\times 0.06\\
+&= 0.005\frac{1-0.9^{j-1}}{1-0.9} + 0.9^j roe_t - 0.9^{j-1}\times 0.06\\
+&= 0.05 - 0.05x-0.9^{j-1} + 0.9^j roe_t - 0.9^{j-1}\times 0.06
+\end{align*}
+
+Plug $E_t[roe_{t+j}]$ into $CF_t$,
+
+\begin{align*}
+CF_t &= E_t\sum_{j=1}^{\infty}\kappa^{j-1}roe_{t+j}\\
+&= \sum_{j=1}^{\infty}\kappa^{j-1}\left[0.05 - 0.05\times 0.9^{j-1} + 0.9^j roe_t - 0.9^{j-1}\times 0.06\right]\\
+&= 0.05\sum_{j=1}^{\infty}\kappa^{j-1} - 0.05\sum_{j=1}^{\infty}(\kappa 0.9)^{j-1} + \frac{1}{0.9}\sum_{j=1}^{\infty}(\kappa 0.9)^{j-1}roe_t - 0.06E_t\sum_{j=1}^{\infty}\kappa^{j-1}\\
+&= \frac{0.05}{1 - \kappa} - \frac{0.05}{1 - 0.9\kappa} + \frac{1}{0.9}\frac{roe_t}{1 - 0.9\kappa} - \frac{0.06}{1 - 0.9\kappa}\\
+&= 2.395451
+\end{align*}
+
+Next, consider $DR_t$,
+$$DR_t = CF_t - mb_t$$
+
+Since we know the value of $CF_t$ and $mb_t$,
+
+\begin{align*}
+DR_t &= CF_t - mb_t \\
+&= 2.395451 - 0.7\\
+&= 1.3814
+\end{align*}
+
+### Question 2
+
+Given: the unconditional mean of $mb_t$ as follw $mb_t = 0.2$. Also, $roe_t$ follows an ARMA(1.1)
+
+Hence, unconditional mean of ARMA(1.1) can be calculated as below.
+
+\begin{align*}
+E[roe_{t+1}] &= /frac{\phi_0}{1 - \phi_1}\\
+&= \frac{0.05 - 0.045}{1 - 0.9}\\
+&= 0.05
+\end{align*}
+
+Plug the mean above into $CF = E_t\sum_{j=1}^{\infty}\kappa^{j-1}roe_{t+j}$.
+
+\begin{align*}
+CF &= E_t\sum_{j=1}^{\infty}\kappa^{j-1}roe_{t+j}\\
+&= \sum_{j=1}^{\infty}\kappa^{j-1}E[roe_{t+j}]\\
+&= E[roe_{t+j}]\frac{1}{1 - \kappa}\\
+&= \frac{0.05}{1 - 0.97}\\
+&= 1.67
+\end{align*}
+
+Therefore,
+
+\begin{align*}
+DR &= CF - mb_t\\
+&= 1.67 - 0.2\\
+&= 1.47
+\end{align*}
+
+Since the unconditional discount rate is higher than the conditional discount rate that is calculated in problem 2-1, this stock is overvalued. In that sense, the value investors should short this stock.

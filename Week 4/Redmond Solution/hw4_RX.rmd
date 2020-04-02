@@ -1,0 +1,112 @@
+---
+title: "HW4"
+author: 'Group 9: Linqi Huang, Abhesh Kumar, Yu Onohara, Maitrayee Patil,  Redmond Xia'''
+date: "January 31, 2020"
+output: pdf_document
+---
+## Problem 1
+# 1
+```{r setup}
+# Cleaning and reading the data
+suppressMessages(suppressWarnings(library(readr)))
+sp500 <- read_csv("sp500.csv", col_types = cols(caldt = col_date(format = "%Y%m%d")))
+sp500$divYield <- (sp500$vwretd - sp500$vwretx)
+colnames(sp500)[1] <- "DATE"
+sp500$DATE <- seq(as.Date("1963-02-01"),length = nrow(sp500), by ="months") - 1
+rf <- read.csv("fedfund.csv")[-1]
+rf$MCALDT <- as.Date(rf$MCALDT, format = "%m/%d/%Y")
+colnames(rf)[1] <- "DATE"
+rf$DATE <- seq(as.Date("1963-02-01"),length = nrow(rf), by ="months") - 1
+rf$TMYTM <- rf$TMYTM / 12 / 100
+AAAFFM <- read.csv("AAAFFM.csv")
+AAAFFM$AAAFFM <- AAAFFM$AAAFFM / 100
+AAAFFM$DATE <- seq(as.Date("1963-02-01"),length = nrow(AAAFFM), by ="months") - 1
+BAAFFM <- read.csv("BAAFFM.csv")
+BAAFFM$BAAFFM <- BAAFFM$BAAFFM / 100
+BAAFFM$DATE <- seq(as.Date("1963-02-01"),length = nrow(BAAFFM), by ="months") - 1
+AAFFM <- merge(AAAFFM,BAAFFM, by = "DATE")
+AAFFM$BAA_AAA <- AAFFM$BAAFFM - AAFFM$AAAFFM
+T10YFFM <- read.csv("T10YFFM.csv")
+T10YFFM$DATE <- seq(as.Date("1963-02-01"),length = nrow(T10YFFM), by ="months") - 1
+T10YFFM$T10YFFM <- T10YFFM$T10YFFM / 100
+merged <- merge(merge(merge(sp500,rf, by = "DATE"),AAFFM[,c(-2,-3)],by = "DATE"),T10YFFM,by = "DATE")
+merged$EXCESS <- log(merged$vwretd+1) - log(merged$TMYTM+1)
+```
+
+# 2
+```{r echo = FALSE}
+par(mfrow = c(2,2))
+plot(merged$DATE, merged$divYield, xlab = "Time", ylab = "Yield", main = "Dividend Yields Vs. Time", type = "l", col = "darkgreen")
+plot(merged$DATE, merged$T10YFFM, xlab = "Time", ylab = "Yield", main = "10Yr T- FFR Vs. Time", type = "l", col = "red")
+plot(merged$DATE, merged$EXCESS, xlab = "Time", ylab = "Yield", main = "Excess Return Vs. Time", type = "l")
+plot(merged$DATE, merged$BAA_AAA, xlab = "Time", ylab = "Yield", main = "Moody BAA - AAA Vs. Time", type = "l", col = "blue")
+```
+
+# 3
+The standard error looks consistent for each regression. It also looks relatively large for small predictors. It's confidence bound is a little too large.
+```{r echo = FALSE}
+suppressMessages(suppressWarnings(library(forecast)))
+suppressMessages(suppressWarnings(library(ggplot2)))
+
+exYield <- lm(EXCESS ~ divYield, data = merged)
+exFFM <- lm(EXCESS ~ T10YFFM, data = merged)
+exBAA <- lm(EXCESS ~ BAA_AAA, data = merged)
+# Below is the regressions output for each one
+summary(exYield)
+summary(exFFM)
+summary(exBAA)
+
+
+ex <- list(exYield,exFFM,exBAA)
+cast1mYield <- predict(exYield,merged)
+cast1mFFM <- predict(exFFM,merged)
+cast1mAAA <- predict(exBAA,merged)
+cast <-list(cast1mYield,cast1mFFM,cast1mAAA)
+forecast <- list(list(),list(),list())
+for(i in 1:length(cast)) {
+  for(k in cast[[i]]) {
+    forecast[[i]] <- append(forecast[[i]],k)
+  }
+}
+
+newMerge <- list(merged$divYield,merged$T10YFFM,merged$BAA_AAA)
+for(j in 1:length(forecast)) {
+  for(k in 2:60)
+  {
+    for(i in 1:nrow(merged)) {
+      r_tk <- ((ex[[j]]$coefficients[2]^k) * newMerge[[j]][i]) - ((ex[[j]]$coefficients[2]^(k-1)) * newMerge[[j]][i])
+      forecast[[j]][[i]] <- append(forecast[[j]][[i]],r_tk)
+    }
+  }
+}
+
+```
+
+# 4.
+```{r echo = FALSE}
+
+forcast12m <- list(numeric(nrow(merged)),numeric(nrow(merged)),numeric(nrow(merged)))
+for(k in 1:length(forcast12m)) {
+  for(i in 1:nrow(merged)) {
+    forcast12m[[k]][i] <- forecast[[k]][[i]][12]
+  }
+}
+par(mfrow = c(2,2))
+plot(merged$DATE, abs(forcast12m[[1]]) , xlab = "Time", ylab =  "Predicted Yield", main = "12 months ahead div yield", type = 'l', col = "darkgreen")
+plot(merged$DATE,forcast12m[[2]], col = "red", xlab = "Time", ylab = "Predicted Yield", main = "12 months ahead term spread", type ='l')
+plot(merged$DATE,abs(forcast12m[[3]]), col = "blue", main = "12 months ahead credit spread", xlab = "Time", ylab = "Predicted Yield", type = 'l')
+```
+Based on the plot, it seems like the term spread increases when dividend yields are really small. Dividends are small during bad times and really big during good times like during the hyper inflation of 80s. Credit spread has a weak correlation with dividend yield but it follows recession better. Thus these patterns do make sense. It shows that when there are extreme times, things are very volatile.
+
+# 5 
+I believe using an AR(1) type setting could be useful instead because the regression doesn't match seasonality correctly. Instead the regression typically overfitts the data and so it follows the noise more closely. Thus we get an average error rate of 1%. The error rate are found below. This is very significant for monthly data who is yield is roughly just one percent.
+```{r}
+errDiv <- mean( (forcast12m[[1]] - merged$divYield)^2)
+sqrt(errDiv)
+errT10FMM <-  mean( (forcast12m[[2]] - merged$T10YFFM)^2)
+sqrt(errT10FMM)
+errBAA <- mean( (forcast12m[[3]] - merged$BAA_AAA)^2)
+sqrt(errBAA)
+```
+
+
